@@ -12,3 +12,11 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
     monospace;
 }
+
+.node-wrapper {
+  font-size: 11px;
+}
+
+.selected-node {
+  border: 3px solid lightgreen
+}

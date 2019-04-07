@@ -9,7 +9,7 @@ const JiraClient = require('jira-connector')
 //  response.send("Hello from Firebase!");
 // });
 
-exports.helloWorld = functions.https.onRequest((req, res) => {
+const corsRequestWithJira = next => (req, res) => {
   console.log('est', req.body.username)
   // Set CORS headers for preflight requests
   // Allows GETs from any origin with the Content-Type header
@@ -33,21 +33,52 @@ exports.helloWorld = functions.https.onRequest((req, res) => {
       }
     })
 
-    jira.search
-      .search({
-        jql:
-          'project = LS AND issuetype in (Task, Sub-task) AND (assignee = olufunmilade.oshodi OR assignee = maya.neria OR assignee = stephen.njuguna OR assignee IS EMPTY) ORDER BY Rank ASC',
-        // 'id = LS-7'
-
-        maxResults: 300
-      })
+    next(req, res, jira)
       .then(response => {
-        console.log('res', response)
         res.set('Access-Control-Allow-Origin', '*')
         res.send(response)
       })
       .catch(err => {
-        res.send(`ERROR: {err}`)
+        console.log('ERRRR', err)
+        res.status(403)
+        res.send(`ERROr ${err}`)
       })
   }
-})
+}
+
+exports.helloWorld = functions.https.onRequest(
+  corsRequestWithJira((req, res, jira) => {
+    const searchJira = (startAt = 0, issues = []) =>
+      jira.search
+        .search({
+          jql:
+            'project = LS AND issuetype in (Task, Sub-task) AND (assignee = olufunmilade.oshodi OR assignee = maya.neria OR assignee = stephen.njuguna OR assignee IS EMPTY) ORDER BY Rank ASC',
+          // 'id = LS-7'
+          startAt,
+          maxResults: 100
+        })
+        .then(response => {
+          issues = issues.concat(response.issues)
+          if (response.issues.length < 100) {
+            response.issues = issuess
+            return response
+          } else {
+            return searchJira(startAt + 100, issues)
+          }
+        })
+
+    return searchJira()
+  })
+)
+
+exports.editIssue = functions.https.onRequest(
+  corsRequestWithJira((req, res, jira) => {
+    console.log('here')
+    return jira.issue.editIssue({
+      issueKey: req.body.issueId,
+      issue: {
+        fields: req.body.fields
+      }
+    })
+  })
+)

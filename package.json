@@ -13,7 +13,9 @@
     "react": "^16.8.6",
     "react-dom": "^16.8.6",
     "react-scripts": "2.1.8",
-    "react-sortable-tree": "^2.6.2"
+    "react-sortable-tree": "^2.6.2",
+    "@material-ui/core": "^3.9.2",
+    "@material-ui/icons": "^3.0.2"
   },
   "scripts": {
     "start": "react-scripts start",
