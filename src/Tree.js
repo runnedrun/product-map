@@ -2,7 +2,7 @@ import React from 'react'
 import SortableTree from 'react-sortable-tree'
 import 'react-sortable-tree/style.css'
 
-const Tree = ({ treeData, updateLocalJiraTree, selectIssue }) => {
+const Tree = ({ treeData, updateLocalJiraTree }) => {
   return (
     <div style={{ height: 400 }}>
       <SortableTree
@@ -11,13 +11,10 @@ const Tree = ({ treeData, updateLocalJiraTree, selectIssue }) => {
         }}
         treeData={treeData}
         onChange={treeData => updateLocalJiraTree(treeData)}
-        generateNodeProps={({ node, path }) => {
+        generateNodeProps={({ node }) => {
           const isSelected = node.selected
           return {
-            className: `${isSelected ? 'selected-node' : ''} node-wrapper`,
-            onClick: () => {
-              selectIssue(node.id)
-            }
+            className: `${isSelected ? 'selected-node' : ''} node-wrapper`
           }
         }}
       />

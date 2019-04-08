@@ -11,6 +11,11 @@ import {
 import IssueDetailsDisplay from './IssueDetailsDisplay.js'
 import Tree from './Tree.js'
 
+const deepClone = require('underscore.deepclone')
+const _ = require('underscore')
+
+_.mixin(deepClone)
+
 const axios = require('axios')
 const deepObjectDiff = require('deep-object-diff')
 
@@ -26,6 +31,12 @@ const styles = theme => ({
   displayRight: {
     flexGrow: 1,
     padding: '10px'
+  },
+  inlineIcon: {
+    marginRight: '5px'
+  },
+  titleWrapper: {
+    display: 'flex'
   }
 })
 
@@ -102,6 +113,7 @@ class App extends Component {
         // handle success
         const tree = this.parseJiraDataIntoTree(response.data)
         this.updateLocalJiraTree(tree)
+        localStorage.rawCache = JSON.stringify(response.data)
       })
   }
 
@@ -124,8 +136,24 @@ class App extends Component {
   }
 
   updateLocalJiraTree(jiraTree) {
-    localStorage.cachedJiraTree = JSON.stringify(jiraTree)
-    this.setState({ jiraTree })
+    const cleanTree = mapNodesInTree({
+      treeData: jiraTree,
+      ignoreCollapsed: false,
+      getNodeKey: ({ node }) => node.id,
+      callback: ({ node }) => {
+        if (!node.id) {
+          // the root node has no data
+          return node
+        }
+
+        node.title = node.jiraData.fields.summary
+
+        return node
+      }
+    })
+
+    localStorage.cachedJiraTree = JSON.stringify(cleanTree)
+    this.setState({ jiraTree: cleanTree })
   }
 
   updateIssueInJira(path, newJiraData) {
@@ -192,6 +220,43 @@ class App extends Component {
       )
     }
 
+    const clonedTree = _.deepClone(tree)
+
+    const treeWithElements = mapNodesInTree({
+      treeData: clonedTree,
+      ignoreCollapsed: false,
+      getNodeKey: ({ node }) => node.id,
+      callback: ({ node }) => {
+        if (!node.id) {
+          // the root node has no data
+          return node
+        }
+
+        node.title = (
+          <div
+            className={this.props.classes.titleWrapper}
+            onClick={() => this.selectIssue(node.id)}
+          >
+            <img
+              className={this.props.classes.inlineIcon}
+              src={node.jiraData.fields.issuetype.iconUrl}
+            />
+            {node.jiraData.fields.assignee ? (
+              <img
+                className={this.props.classes.inlineIcon}
+                src={node.jiraData.fields.assignee.avatarUrls['16x16']}
+              />
+            ) : (
+              ''
+            )}
+            {node.title}
+          </div>
+        )
+
+        return node
+      }
+    })
+
     return (
       <div className="App">
         <div>
@@ -222,8 +287,7 @@ class App extends Component {
           <div className={classes.displayLeft}>
             <Tree
               updateLocalJiraTree={tree => this.updateLocalJiraTree(tree)}
-              treeData={tree}
-              selectIssue={this.selectIssue}
+              treeData={treeWithElements}
             />
           </div>
           <div className={classes.displayRight}>
