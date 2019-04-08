@@ -52,17 +52,19 @@ exports.helloWorld = functions.https.onRequest(
       jira.search
         .search({
           jql:
-            'project = LS AND issuetype in (Task, Sub-task) AND (assignee = olufunmilade.oshodi OR assignee = maya.neria OR assignee = stephen.njuguna OR assignee IS EMPTY) ORDER BY Rank ASC',
+            'project = LS AND issuetype in (Task, Sub-task) AND (assignee = olufunmilade.oshodi OR assignee = maya.neria OR assignee = stephen.njuguna OR assignee = david.gaynor OR assignee IS EMPTY) ORDER BY Rank ASC',
           // 'id = LS-7'
           startAt,
-          maxResults: 100
+          maxResults: 100,
+          expand: ['transitions']
         })
         .then(response => {
           issues = issues.concat(response.issues)
           if (response.issues.length < 100) {
-            response.issues = issuess
+            response.issues = issues
             return response
           } else {
+            console.log('again')
             return searchJira(startAt + 100, issues)
           }
         })
@@ -73,12 +75,21 @@ exports.helloWorld = functions.https.onRequest(
 
 exports.editIssue = functions.https.onRequest(
   corsRequestWithJira((req, res, jira) => {
-    console.log('here')
-    return jira.issue.editIssue({
-      issueKey: req.body.issueId,
-      issue: {
-        fields: req.body.fields
-      }
-    })
+    const transRequest = req.body.transitionId
+      ? jira.issue.transitionIssue({
+          issueKey: req.body.issueId,
+          transition: req.body.transitionId
+        })
+      : Promise.resolve()
+
+    return Promise.all([
+      jira.issue.editIssue({
+        issueKey: req.body.issueId,
+        issue: {
+          fields: req.body.fields
+        }
+      }),
+      transRequest
+    ])
   })
 )

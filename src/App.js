@@ -5,12 +5,14 @@ import {
   getTreeFromFlatData,
   changeNodeAtPath,
   map as mapNodesInTree,
-  find as findInTree
+  find as findInTree,
+  getNodeAtPath
 } from 'react-sortable-tree'
 import IssueDetailsDisplay from './IssueDetailsDisplay.js'
 import Tree from './Tree.js'
 
 const axios = require('axios')
+const deepObjectDiff = require('deep-object-diff')
 
 const styles = theme => ({
   mainDisplay: {
@@ -34,11 +36,11 @@ class App extends Component {
       password: localStorage.password,
       username: localStorage.username,
       jiraTree:
-        localStorage.cachedJira &&
-        this.parseJiraDataIntoTree(JSON.parse(localStorage.cachedJira))
+        localStorage.cachedJiraTree && JSON.parse(localStorage.cachedJiraTree)
     }
+
     this.selectIssue = this.selectIssue.bind(this)
-    this.updateIssue = this.updateIssue.bind(this)
+    this.updateIssueInJira = this.updateIssueInJira.bind(this)
   }
 
   onPasswordChange(password) {
@@ -61,6 +63,19 @@ class App extends Component {
   }
 
   selectIssue(nodeId) {
+    let doIt = true
+    if (
+      this.issueDisplayRef &&
+      this.issueDisplayRef.state &&
+      this.issueDisplayRef.state.unsavedJiraData
+    ) {
+      doIt = window.confirm('Your unsaved changes will be lost')
+    }
+
+    if (!doIt) {
+      return
+    }
+
     const newTree = mapNodesInTree({
       treeData: this.state.jiraTree,
       getNodeKey: _ => _.id,
@@ -86,9 +101,7 @@ class App extends Component {
       .then(response => {
         // handle success
         const tree = this.parseJiraDataIntoTree(response.data)
-        this.setState({ jiraTree: tree })
-        localStorage.cachedJira = JSON.stringify(response.data)
-        // console.log(response.data)
+        this.updateLocalJiraTree(tree)
       })
   }
 
@@ -107,14 +120,39 @@ class App extends Component {
       flatData: ourFormat
     })
 
-    return tree.slice(tree.length - 3, tree.length)
+    return tree
   }
 
   updateLocalJiraTree(jiraTree) {
+    localStorage.cachedJiraTree = JSON.stringify(jiraTree)
     this.setState({ jiraTree })
   }
 
-  updateIssue(path, newJiraData) {
+  updateIssueInJira(path, newJiraData) {
+    const { node } = getNodeAtPath({
+      treeData: this.state.jiraTree,
+      path: path,
+      getNodeKey: ({ node }) => node.id
+    })
+
+    const onlyChangedFields = deepObjectDiff.updatedDiff(
+      node.jiraData,
+      newJiraData
+    )
+
+    let transitionToDo
+    if (onlyChangedFields.fields.status) {
+      const transitions = node.jiraData.transitions
+
+      transitions.forEach(transition => {
+        if (transition.to.id === onlyChangedFields.fields.status.id) {
+          transitionToDo = transition.id
+        }
+      })
+
+      delete onlyChangedFields.fields.status
+    }
+
     const newTree = this.changeNodeAtPath(path, ({ node }) => {
       node.jiraData = newJiraData
       return node
@@ -127,13 +165,14 @@ class App extends Component {
         username: this.state.username,
         password: this.state.password,
         issueId,
-        fields: newJiraData.fields
+        fields: onlyChangedFields.fields,
+        transitionId: transitionToDo
       })
       .then(response => {
         console.log('updated', response)
       })
 
-    this.setState({ jiraTree: newTree })
+    this.updateLocalJiraTree(newTree)
   }
 
   render() {
@@ -144,6 +183,14 @@ class App extends Component {
       treeData: this.state.jiraTree,
       searchMethod: ({ node }) => node.selected
     })
+
+    let tree = []
+    if (this.state.jiraTree) {
+      tree = this.state.jiraTree.slice(
+        this.state.jiraTree.length - 3,
+        this.state.jiraTree.length
+      )
+    }
 
     return (
       <div className="App">
@@ -175,14 +222,17 @@ class App extends Component {
           <div className={classes.displayLeft}>
             <Tree
               updateLocalJiraTree={tree => this.updateLocalJiraTree(tree)}
-              treeData={this.state.jiraTree || []}
+              treeData={tree}
               selectIssue={this.selectIssue}
             />
           </div>
           <div className={classes.displayRight}>
             <IssueDetailsDisplay
               nodeData={matches[0]}
-              updateIssue={this.updateIssue}
+              updateIssue={this.updateIssueInJira}
+              assignChild={ref => {
+                this.issueDisplayRef = ref
+              }}
             />
           </div>
         </div>
